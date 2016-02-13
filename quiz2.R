@@ -1,6 +1,14 @@
 # week 2 quiz
 
 # 1.
+library(caret)
+library(AppliedPredictiveModeling)
+data(AlzheimerDisease)
+adData = data.frame(diagnosis,predictors)
+trainIndex = createDataPartition(diagnosis,p=0.5,list=FALSE)
+training = adData[trainIndex,]
+testing = adData[-trainIndex,]
+# looks good to me!
 
 # 2.
 library(caret)
@@ -17,34 +25,52 @@ mixtures$idx <- 1:nrow(mixtures)
 qplot(idx, FlyAsh, data=mixtures, colour=CutCS)
 qplot(idx, Age, data=mixtures, colour=CutCS)
 vars <- names(mixtures)[1:8]
-for (v in vars) {
-  qplot(idx, v, data=mixtures, colour=CutCS)
-}
 
-# 5.
+#3.
+library(AppliedPredictiveModeling)
+data(concrete)
+hist(concrete$Superplasticizer)
+hist(log(1 + concrete$Superplasticizer))
+nz <- concrete$Superplasticizer[concrete$Superplasticizer > 0]
+hist(nz)
+hist(log(nz))
+# A lot around zero, so log transformation would not make it look normal
 
+# 4.
 library(caret)
 library(AppliedPredictiveModeling)
-set.seed(3433)
 data(AlzheimerDisease)
-adData = data.frame(diagnosis,predictors)
+set.seed(3433)
+adData = data.frame(diagnosis, predictors)
+inTrain = createDataPartition(adData$diagnosis, p = 3/4)[[1]]
+training = adData[ inTrain,]
+testing = adData[-inTrain,]
+cols <- grep("^IL", names(training), value=TRUE)
+trainIL <- training[,cols]
+pp <- preProcess(trainIL, method="pca", thresh=0.9)
+# 9 components
+
+# 5.
+library(caret)
+library(AppliedPredictiveModeling)
+data(AlzheimerDisease)
+set.seed(3433)
+adData = data.frame(diagnosis, predictors)
 inTrain = createDataPartition(adData$diagnosis, p = 3/4)[[1]]
 training = adData[ inTrain,]
 testing = adData[-inTrain,]
 
-cols <- grep("^IL",names(training),value=TRUE)
+cols <- grep("^IL", names(training), value=TRUE)
 trainIL <- training[,cols]
-pp <- preProcess(trainIL, method="pca", thresh=0.8)
-
-# Same as 4 up to here. 7 PCs
-
-trainILdiag <- cbind(diagnosis=training$diagnosis, trainIL)
+#put diagnosis back
+trainILdiag <- cbind(diagnosis=training$diagnosis, trainIL) 
 mIL <- train(diagnosis ~ ., data=trainILdiag, method="glm")
 predIL <- predict(mIL, newdata=testing) 
 round(mean(predIL==testing$diagnosis), 2)
-# confusionMatrix(predIL,testing$diagnosis) 
 # .65 accuracy
 
+# Find PCAs
+pp <- preProcess(trainIL, method="pca", thresh=0.9)
 # Pre-process training set
 trainILP <- predict(pp,trainIL)
 trainILPdiag <- cbind(diagnosis=training$diagnosis, trainILP)
