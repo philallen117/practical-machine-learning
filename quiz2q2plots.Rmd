@@ -1,0 +1,63 @@
+---
+title: "Quiz 2 question 2 plots"
+author: "Phil Allen"
+date: "13 February 2016"
+output: html_document
+---
+
+
+```{r, echo=FALSE,results='hide', message=FALSE}
+library(caret)
+library(AppliedPredictiveModeling)
+library(Hmisc)
+library(ggplot2)
+data(concrete)
+```
+
+Plot the outcome compressive strength by row index, to see if the data has been accumulated from sets with different characteristics.
+
+```{r, echo=FALSE}
+plot(mixtures$CompressiveStrength)
+```
+
+There seem to be diagonal bands, with discontinuities around rows 200, 400, 550 and 900 in the data set 
+
+```{r}
+# Cut compressive strength into five even-size bins.
+mixtures$CutCS <- cut2(mixtures$CompressiveStrength,g=5)
+# Add index column to help qplot.
+mixtures$idx <- 1:nrow(mixtures)
+```
+
+The variables of interest are: `r sort(names(mixtures)[1:8])`
+
+Plot them against index, colouring by the binned compressive strength.
+
+```{r, echo=FALSE}
+qplot(idx, Age, data=mixtures, colour=CutCS)
+```
+```{r, echo=FALSE}
+qplot(idx, BlastFurnaceSlag, data=mixtures, colour=CutCS)
+```
+```{r, echo=FALSE}
+qplot(idx, Cement, data=mixtures, colour=CutCS)
+```
+```{r, echo=FALSE}
+qplot(idx, CoarseAggregate, data=mixtures, colour=CutCS)
+```
+```{r, echo=FALSE}
+qplot(idx, FineAggregate, data=mixtures, colour=CutCS)
+```
+```{r, echo=FALSE}
+qplot(idx, FlyAsh, data=mixtures, colour=CutCS)
+```
+```{r, echo=FALSE}
+qplot(idx, Superplasticizer, data=mixtures, colour=CutCS)
+```
+```{r, echo=FALSE}
+qplot(idx, Water, data=mixtures, colour=CutCS)
+```
+
+None of these variables clearly aligns with the discontinuities in the outcome measure. This may suggest a missing predictor variable.
+
+
