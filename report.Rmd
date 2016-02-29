@@ -1,20 +1,130 @@
 ---
-title: "Exercise prediction from Nike ???"
+title: "Exercise class prediction based on measurements from wearable devices"
 author: "Phil Allen"
-date: "14 February 2016"
+date: "28 February 2016"
 output: html_document
 ---
 
-# Guide
-
-The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
-
-Peer Review Portion
-
-Your submission for the Peer Review portion should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders :-).
-
-Course Project Prediction Quiz Portion
-
-Apply your machine learning algorithm to the 20 test cases available in the test data above and submit your predictions in appropriate format to the Course Project Prediction Quiz for automated grading.
-
 # Summary
+
+I studied the data set described in Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. [Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements](http://groupware.les.inf.puc-rio.br/public/papers/2012.Ugulino.WearableComputing.HAR.Classifier.RIBBON.pdf), Proc. 21st Brazilian Symposium on Artificial Intelligence, Advances in Artificial Intelligence - SBIA 2012.
+
+Ugulino et al. attempt a form of Human Activity Recognition using measurements from wearable devices. Subjects performed exercises while wearing measurement devices. They were asked to perform in several _classes_, that is correctly, and with some common errors. The objective of the study was to predict the class of exercise using data collected from the measurement devices.
+
+Using their [raw data](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv), I attempted a similar prediction. Using the R [caret](http://topepo.github.io/caret/index.html) package, I tidied the data, separated a validation set, applied pre-processing to reduce dimensionality, and trained a Random Forest model.
+
+The error rate on the validation set was 2.2%.
+
+# Clean the data
+
+```{r, echo=FALSE, results='hide', warning=FALSE, message=FALSE}
+library(caret)
+setwd("c:/Users/Phil/repos/practical-machine-learning")
+```
+
+```{r, cache=TRUE}
+training <- read.csv("pml-training.csv", stringsAsFactors = FALSE, header = TRUE)
+```
+
+The data comprises the outcome classe, the subject name, timestamps, (capture) window data, and real-valued static and dynamic measures. Classify the data appropriately.
+```{r typing, cache=TRUE, warning=FALSE}
+training_classe <- as.factor(training$classe)
+training$user_name <- as.factor(training$user_name)
+training$new_window <- as.factor(training$new_window)
+# turn literal datetimes into R timestamps
+training$cvtd_timestamp <-
+  as.numeric(strptime(training$cvtd_timestamp, format="%d/%m/%Y %H:%M"))
+for (col in 8:ncol(training)) { training[,col] <- as.numeric(training[,col]) }
+```
+
+I suspect cvtd_timestamp is derived from raw_timestamp_part_1 , raw_timestamp_part_2.
+```{r, cache=TRUE}
+findLinearCombos(training[,c("raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp")])$remove
+```
+This confirms that cvtd_timestamp is redundant, and can removed from the predictor set, along with the row number, the new window flag and the outcome.
+
+```{r, cache=TRUE}
+training_pp1 <- training[,-c(1,5,6,160)]
+```
+
+There is a great deal of missing data, mainly due to sparse measures rather than a scatter of rows.
+```{r, cache=TRUE}
+miss_rates <- apply(training_pp1, 2, function(x){mean(is.na(x))})
+miss95 <- which(miss_rates > 0.95)
+c(length(miss95), length(which(miss_rates > 0.01)))
+```
+Note that the same number of measures are missing 95% of their values as are missing 1% of their values. So remove measures identified here from the set of predictors.
+```{r, cache=TRUE}
+training_pp1 <- training_pp1[,-miss95]
+```
+
+# Training and validation data sets
+
+Now split out a validation set from training.
+```{r, cache=TRUE}
+set.seed(123)
+in_train_idx <- createDataPartition(training_classe, p=0.7, list = FALSE)
+valset_classe <- training_classe[-in_train_idx]
+training_classe <- training_classe[in_train_idx]
+valset_pp1 <- training_pp1[-in_train_idx,]
+training_pp1 <- training_pp1[in_train_idx,]
+```
+
+# Pre-process to reduce dimensionality of predictors
+
+Of the remaining measures, many are heavily skewed, e.g. magnet_dumbbell_x.
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(ggplot2)
+qplot(training_pp1$magnet_dumbbell_x, geom="histogram")
+```
+
+So apply [Yeo-Johnson](http://www.inside-r.org/packages/cran/VGAM/docs/yeo.johnson), which is similar to Box-Cox but tolerates negative values. Other measures have very small variance, so apply  [nzv](http://www.inside-r.org/packages/cran/caret/docs/nearZeroVar). Finally, to cut down the number of predictors, apply [PCA](https://en.wikipedia.org/wiki/Principal_component_analysis) with a variance threshold of 90%.
+
+```{r, cache=TRUE}
+set.seed(456)
+pp2 <- preProcess(training_pp1, method=c("YeoJohnson", "nzv", "pca"), thresh=0.9)
+training_pp2 <- predict(pp2, newdata=training_pp1)
+```
+This leaves `r dim(training_pp2)[2]` predictors for use in model fitting.
+
+# Training
+
+Following the lectures, I decided to try Random Forests.
+
+As [Breiman](http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr) notes, there is no need to apply cross-validation to Random Forests. Also, Random Forests predictor in R provides an OOB error estimate. Therefore, I _could_ use all of "training" for fitting, and use "testing" as the hold-out. However, for learning reasons, I will use distinct training and validation sets, as defined aove.
+
+Train the model.
+```{r, cache=TRUE}
+mrfpp2 <- train(y=training_classe, x=training_pp2, method="rf")
+```
+
+# Validation: OOB error estimates
+
+Printing the final model provides an estimate of OOB error: 2.14%.
+
+Apply the model to the validation set, making sure to pre-process.
+```{r pvalset, cache=TRUE}
+valset_pp2 <- predict(pp2, newdata=valset_pp1)
+valset_pred <- predict(mrfpp2, newdata=valset_pp2)
+confusionMatrix(valset_pred, valset_classe)
+valset_acc <- mean(valset_pred != valset_classe)
+```
+The OOB error estimate given by the accuracy of the validation set is `r round(100*valset_acc, 2)`%.
+
+# Quiz examples
+
+Clean and pre-process the test data in the same way as the training data above.
+```{r pptest, cache=TRUE}
+testing <- read.csv("pml-testing.csv", stringsAsFactors = FALSE, header = TRUE)
+testing$user_name <- as.factor(testing$user_name)
+for (col in 8:ncol(testing)) { testing[,col] <- as.numeric(testing[,col]) }
+testing_pp1 <- testing[,-c(1,5,6,160)]
+testing_pp1 <- testing_pp1[,-miss95]
+testing_pp2 <- predict(pp2, newdata=testing_pp1)
+```
+
+The predictions for the quiz are:
+```{r ptest, cache=TRUE}
+testing_preds <- predict(mrfpp2, newdata=testing_pp2)
+as.character(testing_preds)
+```

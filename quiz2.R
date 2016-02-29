@@ -42,11 +42,11 @@ library(AppliedPredictiveModeling)
 data(AlzheimerDisease)
 set.seed(3433)
 adData = data.frame(diagnosis, predictors)
-inTrain = createDataPartition(adData$diagnosis, p = 3/4)[[1]]
-training = adData[ inTrain,]
-testing = adData[-inTrain,]
-cols <- grep("^IL", names(training), value=TRUE)
-trainIL <- training[,cols]
+inTrain4 = createDataPartition(adData$diagnosis, p = 3/4)[[1]]
+training4 = adData[ inTrain4,]
+testing4 = adData[-inTrain4,]
+cols <- grep("^IL", names(training4), value=TRUE)
+trainIL <- training4[,cols]
 pp <- preProcess(trainIL, method="pca", thresh=0.9)
 # 9 components
 

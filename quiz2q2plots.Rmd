@@ -6,7 +6,7 @@ output: html_document
 ---
 
 
-```{r, echo=FALSE,results='hide', message=FALSE}
+```{r, echo=FALSE,results='hide', message=FALSE, cache=TRUE}
 library(caret)
 library(AppliedPredictiveModeling)
 library(Hmisc)
@@ -22,7 +22,7 @@ plot(mixtures$CompressiveStrength)
 
 There seem to be diagonal bands, with discontinuities around rows 200, 400, 550 and 900 in the data set 
 
-```{r}
+```{r cutit, cache=TRUE}
 # Cut compressive strength into five even-size bins.
 mixtures$CutCS <- cut2(mixtures$CompressiveStrength,g=5)
 # Add index column to help qplot.
